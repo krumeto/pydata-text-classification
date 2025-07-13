@@ -5,12 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "datasets<4",
     "lightning>=2.5.2",
     "marimo>=0.14.10",
     "model2vec[training]>=0.6.0",
     "pandas>=2.3.1",
     "setfit>=1.1.2",
     "skops>=0.11.0",
+    "typer>=0.16.0",
 ]
 
 [dependency-groups]
