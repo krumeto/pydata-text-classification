@@ -6,6 +6,8 @@ from time import perf_counter
 from datasets import Dataset
 from model2vec.train import StaticModelForClassification
 from typing import Optional
+from huggingface_hub import login
+from dotenv import load_dotenv
 
 from settings import SAMPLE_LABELS, MAIN_OUTPUT_DIR
 from utils import compute_metrics, print_details
@@ -31,9 +33,21 @@ def main(
     """
     Train a model2vec classifier and compute metrics aligned with the SetFit baseline.
     """
+    load_dotenv()
+
     train_ds = Dataset.from_parquet("data/train.parquet")
     eval_ds = Dataset.from_parquet("data/eval.parquet")
     test_ds = Dataset.from_parquet("data/test.parquet")
+
+    hf_token = os.getenv("HF_TOKEN")
+    if hf_token:
+        login(token=hf_token, write_permission=True)
+        typer.echo("Authenticated with Hugging Face Hub")
+    else:
+        typer.echo(
+            "Warning: HF_TOKEN not found in environment, attempting manual login"
+        )
+        login()
 
     if prefix:
 
@@ -54,32 +68,45 @@ def main(
     texts = train_ds["text"]
     labels = train_ds["label"]
     typer.echo("Starting training...")
-    start = perf_counter()
+    start_train = perf_counter()
     classifier = classifier.fit(texts, labels)
-    elapsed = int(perf_counter() - start)
-    typer.echo(f"Training took {elapsed} seconds.")
+    end_train = perf_counter()
+    train_time = end_train - start_train
+    typer.echo(f"Training completed in {train_time:.3f} seconds")
 
     typer.echo("Evaluating on test set...")
+    start_test = perf_counter()
     y_pred_test = classifier.predict(test_ds["text"])
+    end_test = perf_counter()
+    test_time = end_test - start_test
+    typer.echo(f"Test run completed in {test_time:.3f} seconds")
+
     y_true_test = test_ds["label"]
     test_metrics = compute_metrics(y_pred_test, y_true_test)
+    test_metrics["train_time_seconds"] = train_time
+    test_metrics["test_time_seconds"] = test_time
     typer.echo("Test metrics:")
     typer.echo(test_metrics)
 
     print_details(y_pred_test, y_true_test, SAMPLE_LABELS)
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    dt_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    save_path = os.path.join(OUTPUT_DIR, f"{model_name.replace('/', '_')}_{dt_str}")
-    os.makedirs(save_path, exist_ok=True)
-    typer.echo(f"Saving model to {save_path}")
-    pipeline = classifier.to_pipeline()
-    pipeline.save_pretrained(save_path)
+    datetime_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-    metrics_path = os.path.join(save_path, f"metrics_{dt_str}.json")
+    project_name = os.getenv("PROJECT_NAME", "text-class-tutorial")
+    hf_profile = os.getenv("HF_PROFILE_NAME", "user")
+    repo_name = f"{hf_profile}/{project_name}-model2vec"
+    typer.echo(f"Pushing model to Hugging Face Hub as: {repo_name}")
+
+    pipeline = classifier.to_pipeline()
+    pipeline.push_to_hub(repo_name)
+    typer.echo(f"Model successfully pushed to hub: {repo_name}")
+
+    # Save metrics locally only
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    metrics_path = os.path.join(OUTPUT_DIR, f"metrics_{datetime_str}.json")
     with open(metrics_path, "w") as f:
         json.dump(test_metrics, f, indent=2)
-    typer.echo(f"Metrics saved to {metrics_path}")
+    typer.echo(f"Metrics saved locally to: {metrics_path}")
 
     # Example prediction
     test_example = test_ds[0]["text"]

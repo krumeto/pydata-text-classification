@@ -1,11 +1,14 @@
 import os
 import json
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Optional
 
 import typer
 from datasets import Dataset
 from setfit import SetFitModel, Trainer, TrainingArguments
+from huggingface_hub import login
+from dotenv import load_dotenv
 
 from settings import SAMPLE_LABELS, MAIN_OUTPUT_DIR
 from utils import compute_metrics, print_details
@@ -25,9 +28,21 @@ def main(
         help="If set, prepend this string to every example's text before training.",
     ),
 ):
+    load_dotenv()
+
     train_dataset = Dataset.from_parquet("data/train.parquet")
     eval_dataset = Dataset.from_parquet("data/eval.parquet")
     test_dataset = Dataset.from_parquet("data/test.parquet")
+
+    hf_token = os.getenv("HF_TOKEN")
+    if hf_token:
+        login(token=hf_token, write_permission=True)
+        typer.echo("Authenticated with Hugging Face Hub")
+    else:
+        typer.echo(
+            "Warning: HF_TOKEN not found in environment, attempting manual login"
+        )
+        login()
 
     if prefix is not None:
 
@@ -40,7 +55,6 @@ def main(
 
     print("Datasets loaded")
 
-    # Load a SetFit model from Hub with the provided model name
     model = SetFitModel.from_pretrained(
         f"{model_name}",
         labels=SAMPLE_LABELS,
@@ -69,28 +83,52 @@ def main(
         column_mapping={
             "text": "text",
             "label": "label",
-        },  # Map dataset columns to text/label expected by trainer
+        }, 
     )
 
     # Train and evaluate
+    start_train = perf_counter()
     trainer.train()
+    end_train = perf_counter()
+    train_time = end_train - start_train
+    typer.echo(f"Training completed in {train_time:.3f} seconds")
+
+    start_test = perf_counter()
     metrics = trainer.evaluate(test_dataset)
+    end_test = perf_counter()
+    test_time = end_test - start_test
+    typer.echo(f"Test run completed in {test_time:.3f} seconds")
+
+    metrics["train_time_seconds"] = train_time
+    metrics["test_time_seconds"] = test_time
     typer.echo(metrics)
 
-    # Saving the trained model in a folder that depends on the model name
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # Save model to Hugging Face Hub and metrics locally
     datetime_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    save_path = f"{OUTPUT_DIR}/{model_name}_{datetime_str}"
-    model.save_pretrained(save_path)
 
+    project_name = os.getenv("PROJECT_NAME", "text-class-tutorial")
+    hf_profile = os.getenv("HF_PROFILE_NAME", "user")
+    repo_name = f"{hf_profile}/{project_name}-setfit"
+    typer.echo(f"Pushing model to Hugging Face Hub as: {repo_name}")
+
+    # Push model to hub
+    model.push_to_hub(repo_name)
+    typer.echo(f"Model successfully pushed to hub: {repo_name}")
+
+    # Save metrics locally only
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    metrics_path = os.path.join(OUTPUT_DIR, f"metrics_{datetime_str}.json")
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=2)
+    typer.echo(f"Metrics saved locally to: {metrics_path}")
+
+    # Generate predictions and print details
     texts = test_dataset["text"]
     y_true = test_dataset["label"]
     y_pred = model.predict(texts)
     print_details(y_pred, y_true, SAMPLE_LABELS)
 
-    with open(os.path.join(save_path, f"metrics_{datetime_str}.json"), "w") as f:
-        json.dump(metrics, f, indent=2)
-
+    # Example prediction
     test_example = test_dataset[0]["text"]
     typer.echo(test_example)
     typer.echo(model.predict(test_example))
