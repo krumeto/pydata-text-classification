@@ -1,12 +1,11 @@
 import os
 import json
 from datetime import datetime, timezone
-from typing import Sequence, Dict, Any, Union, Optional
+from typing import Optional
 
 import typer
-import numpy as np
-from datasets import load_dataset, Dataset
-from setfit import SetFitModel, Trainer, TrainingArguments, sample_dataset
+from datasets import Dataset
+from setfit import SetFitModel, Trainer, TrainingArguments
 
 from settings import SAMPLE_LABELS, MAIN_OUTPUT_DIR
 from utils import compute_metrics, print_details
@@ -15,14 +14,15 @@ OUTPUT_DIR = MAIN_OUTPUT_DIR + "setfit"
 
 app = typer.Typer()
 
+
 @app.command()
 def main(
     model_name: str,
     prefix: Optional[str] = typer.Option(
         None,
-       "--prefix",
+        "--prefix",
         "-p",
-        help="If set, prepend this string to every example's text before training."
+        help="If set, prepend this string to every example's text before training.",
     ),
 ):
     train_dataset = Dataset.from_parquet("data/train.parquet")
@@ -30,14 +30,15 @@ def main(
     test_dataset = Dataset.from_parquet("data/test.parquet")
 
     if prefix is not None:
+
         def add_prefix(example):
             return {"text": f"{prefix}{example['text']}"}
 
         train_dataset = train_dataset.map(add_prefix)
-        eval_dataset  = eval_dataset.map(add_prefix)
-        test_dataset  = test_dataset.map(add_prefix)
+        eval_dataset = eval_dataset.map(add_prefix)
+        test_dataset = test_dataset.map(add_prefix)
 
-    print('Datasets loaded')
+    print("Datasets loaded")
 
     # Load a SetFit model from Hub with the provided model name
     model = SetFitModel.from_pretrained(
@@ -65,7 +66,10 @@ def main(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         metric=compute_metrics,
-        column_mapping={"text": "text", "label": "label"},  # Map dataset columns to text/label expected by trainer
+        column_mapping={
+            "text": "text",
+            "label": "label",
+        },  # Map dataset columns to text/label expected by trainer
     )
 
     # Train and evaluate
@@ -87,10 +91,11 @@ def main(
     with open(os.path.join(save_path, f"metrics_{datetime_str}.json"), "w") as f:
         json.dump(metrics, f, indent=2)
 
-    test_example = test_dataset[0]['text']
+    test_example = test_dataset[0]["text"]
     typer.echo(test_example)
     typer.echo(model.predict(test_example))
     typer.echo(model.predict_proba(test_example))
+
 
 if __name__ == "__main__":
     app()
