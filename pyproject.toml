@@ -5,7 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "datasets<4",
+    "datasets>=4.0.0",
+    "ipython>=8.37.0",
     "lightning>=2.5.2",
     "marimo>=0.14.10",
     "model2vec[training]>=0.6.0",

@@ -53,8 +53,8 @@ def _():
         "Australia",
     ]
 
-    VAL_SET_SIZE = 0.1
-    TEST_SET_SIZE = 0.1
+    VAL_SET_SIZE = 0.15
+    TEST_SET_SIZE = 0.15
     return (
         DATASET_NAME,
         ENGLISH_SPEAKING_COUNTRIES,
@@ -108,7 +108,7 @@ def _(
 
     ds = (
         load_dataset(
-            DATASET_NAME, SUBSET, split="train[:7000]"
+            DATASET_NAME, SUBSET, split="train[:7500]"
         )  # starting with a bit more, as we are doing a lot of filtering below
         .filter(
             lambda row: row["coarse_tasks"] in SAMPLE_LABELS
