@@ -1,7 +1,29 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "datasets==4.0.0",
+#     "marimo>=0.14.10",
+#     "pandas==2.3.1",
+#     "scikit-learn==1.7.1",
+# ]
+# ///
+
 import marimo
 
-__generated_with = "0.14.10"
+__generated_with = "0.14.12"
 app = marimo.App(width="medium")
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ## Due to `datasets` being a mess of a package, run this notebook with
+    `uvx marimo edit --sandbox data_pull.py`
+    If you are interested, check `uvx` and the shebang at the start of the notebook.
+    """
+    )
+    return
 
 
 @app.cell
