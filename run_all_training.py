@@ -20,13 +20,8 @@ def run_command(cmd):
 def main():
     print("Starting sequential training of all models...\n")
 
-    # Run TF-IDF training
     run_command(["python", "train_tfidf.py"])
-
-    # Run model2vec training with specified model
     run_command(["python", "train_model2vec.py", "minishlab/potion-base-32M"])
-
-    # Run SetFit training with specified model
     run_command(["python", "train_setfit.py", "BAAI/bge-small-en-v1.5"])
 
     print("All training completed successfully! 🎉")
